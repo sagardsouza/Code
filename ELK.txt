@@ -1,0 +1,54 @@
+import groovy.json.*
+import hudson.model.*
+
+manager.listener.logger.println "*************************Pushing BuildMetrics to ELK started****************************"
+                  def result = manager.build.result
+                  //manager.listener.logger.println result       // Prints just the build result
+                  def WORKSPACE = manager.build.getEnvironment(manager.listener).get('WORKSPACE')
+
+                  def json = new groovy.json.JsonBuilder()
+				  build_url_index=(manager.build.url).toString().indexOf(manager.build.number.toString())
+                  build_url=manager.build.url.substring(0,build_url_index)
+                  def root = json{
+                      app_code manager.build.url.substring(4, 7)
+                      build_number manager.build.number
+                      '@timestamp' manager.build.timestamp
+                      build_duration System.currentTimeMillis()-manager.build.getTimeInMillis()
+                      build_url build_url.toString()
+                      build_project_name manager.build.project.name
+                      build_result result.toString() // get the string representation
+
+                  }
+                  //println(manager.build.url.substring(4, 7))
+                  //manager.listener.logger.println "...and the status is ${result}"     // Prints just the   build result
+                 new File('log.txt').createNewFile()
+
+
+                    def JsonFile = new File('log.txt').write("'"+JsonOutput.prettyPrint(json.toString()) + "'" )
+                  def ELK_URL = manager.build.getEnvironment(manager.listener).get('ELK_URL')
+                  def ELK_Build_Index = manager.build.getEnvironment(manager.listener).get('ELK_Build_Index')
+
+                  def ELK = ELK_URL.toString()+ELK_Build_Index.toString()
+
+                  //manager.listener.logger.println ELK
+                  String fileContents = new File('log.txt').text
+
+                  String curlPost = "curl -X POST --connect-timeout 5 "+ELK.toString()+" -d"+fileContents
+                  //manager.listener.logger.println curlPost
+
+                  process = [ 'bash', '-c', curlPost ].execute().text
+
+                   if(process.contains("err_code"))
+				{
+				manager.listener.logger.println "Please contact ADM-DevOps for this error!!"
+
+				}
+
+ manager.listener.logger.println "*************************Pushing BuildMetrics to ELK completed****************************"
+
+ manager.listener.logger.println "*************************Workspace Clean-up Started ****************************"
+
+ manager.build.getWorkspace().deleteRecursive() 
+
+ manager.listener.logger.println "*************************Workspace Clean-up Completed ****************************"
+            
